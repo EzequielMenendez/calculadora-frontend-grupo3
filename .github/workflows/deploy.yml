@@ -1,0 +1,99 @@
+# Despliegue automatico del FRONTEND.
+#
+# Fijate que este archivo se llama deploy.yml y el del backend se llama
+# tests.yml. La diferencia no es cosmetica: son dos cosas distintas.
+#
+# El del backend VERIFICA y despues deploya. Este solo deploya, porque este
+# repositorio no tiene suite de pruebas: es HTML, CSS y JavaScript que corre
+# en el navegador del visitante, sin paso de compilacion y sin nada que
+# ejecutar en el servidor.
+#
+# Y hay que decirlo con todas las letras, sin adornarlo:
+#
+#     ESTE WORKFLOW NO TE PROTEGE DE SUBIR ALGO ROTO.
+#
+# No hay ninguna verificacion entre tu push y produccion. Si rompes el
+# index.html, se publica roto. Con este archivo no compraste seguridad;
+# compraste otras dos cosas, que igual valen:
+#
+#   1. MINIMO PRIVILEGIO. La alternativa —el Auto Deploy del panel— necesita
+#      que el token de GitHub que le diste a Easypanel tenga permiso de
+#      ESCRITURA sobre webhooks, porque Easypanel crea uno en tu repositorio.
+#      Haciendolo desde aca, ese token puede ser de solo lectura. Es el mismo
+#      principio del capitulo de seguridad: nadie tiene mas permisos que los
+#      que necesita para su tarea.
+#
+#   2. UN SOLO MECANISMO. Los dos repositorios se deployan igual, desde el
+#      mismo lugar, y el historial de despliegues se lee entero en la pestaña
+#      Actions. Dos mecanismos distintos para la misma cosa es la clase de
+#      detalle que te hace perder media hora el dia que algo falla.
+#
+# El dia que este front tenga algo que verificar —un validador de HTML, una
+# prueba de navegador que compruebe que el fetch sale— se agrega el job de
+# verificacion arriba y este job pasa a depender de el con `needs`, igual que
+# en el backend. El lugar ya esta preparado.
+
+name: deploy
+
+# Solo en los push a main.
+#
+# Fijate que aca NO va pull_request, y es a proposito: en el backend tiene
+# sentido correr los tests sobre un PR, porque hay algo que verificar. Aca no
+# hay nada que correr, y deployar produccion desde un PR seria exactamente lo
+# que no queremos.
+#
+# Como `on` ya limita el disparo a main, el job no necesita ningun `if`
+# adicional: el filtro esta puesto una sola vez y en el lugar correcto.
+on:
+  push:
+    branches: [main]
+
+  # Permite dispararlo a mano desde la pestaña Actions, con un boton.
+  # Sirve para redeployar sin tener que inventar un commit vacio — por
+  # ejemplo, despues de cambiar la variable API_URL en el panel.
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # OJO: no hay actions/checkout, y no es un olvido.
+      #
+      # Este job no necesita el codigo: lo unico que hace es pegarle a una
+      # URL. Quien clona el repositorio es EASYPANEL, del otro lado, cuando
+      # recibe el aviso. Clonar aca seria bajar archivos para no usarlos.
+      - name: Avisarle a Easypanel que redespliegue
+        env:
+          # La URL lleva un token adentro, asi que la URL entera es una
+          # credencial: cualquiera que la tenga puede disparar despliegues en
+          # tu servidor. Va en Settings -> Secrets and variables -> Actions,
+          # NUNCA escrita en este archivo, que es publico si el repo lo es.
+          #
+          # Y ACA EL ERROR QUE TE VA A PASAR: la URL tiene que ser la del
+          # servicio FRONTEND, no la del api. Son dos URLs distintas y se
+          # parecen muchisimo. Si pegas la del api, cada cambio del HTML te
+          # redeploya el backend y el front se queda como estaba — con el
+          # agravante de que el workflow sale en verde, porque el curl anduvo
+          # perfecto. Se le pego a la puerta equivocada, nada mas.
+          URL_DE_DEPLOY: ${{ secrets.EASYPANEL_DEPLOY_URL }}
+
+        run: |
+          # Si el secret todavia no esta cargado, avisamos y salimos BIEN.
+          # Asi cualquiera puede clonar el repositorio sin tener acceso a
+          # ningun servidor y no se encuentra un tilde rojo que no significa
+          # nada. Un rojo que no significa nada es un rojo que se ignora.
+          if [ -z "$URL_DE_DEPLOY" ]; then
+            echo "El secret EASYPANEL_DEPLOY_URL no esta cargado: no hay a quien avisarle."
+            echo "Se carga en Settings -> Secrets and variables -> Actions."
+            echo "La URL sale de Easypanel -> servicio frontend -> Deployments."
+            exit 0
+          fi
+
+          # -f hace que curl falle si el servidor contesta un error. Sin esa
+          # bandera, curl devuelve exito aunque le contesten 401, y te queda
+          # un despliegue que "salio bien" y nunca ocurrio.
+          # -sS calla la barra de progreso pero deja pasar los errores.
+          curl -fsS -X POST "$URL_DE_DEPLOY"
+          echo ""
+          echo "Redespliegue disparado. Segui el avance en el panel."
