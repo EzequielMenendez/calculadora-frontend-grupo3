@@ -86,7 +86,7 @@
       margin-bottom: .4rem;
     }
 
-    .operaciones { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; }
+    .operaciones { display: grid; grid-template-columns: repeat(5, 1fr); gap: .6rem; }
 
     /* Los radios reales quedan invisibles pero SIGUEN EXISTIENDO y siguen
        siendo accesibles: se navegan con flechas y los lee un lector de
@@ -314,8 +314,12 @@
       font-variant-numeric: tabular-nums;
     }
 
-    @media (max-width: 480px) {
+    @media (max-width: 620px) {
       .fila-operandos { grid-template-columns: 1fr; }
+      .operaciones { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (max-width: 480px) {
       .operaciones { grid-template-columns: repeat(2, 1fr); }
     }
   </style>
@@ -367,6 +371,9 @@
 
             <input type="radio" id="op-div" name="operacion" value="division">
             <label for="op-div"><span class="simbolo">÷</span>División</label>
+
+            <input type="radio" id="op-potencia" name="operacion" value="potencia">
+            <label for="op-potencia"><span class="simbolo">^</span>Potencia</label>
           </div>
         </fieldset>
 
